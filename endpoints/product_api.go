@@ -77,9 +77,6 @@ func (api ProductAPI) GenerateProducts(response http.ResponseWriter, request *ht
 }
 
 func (api ProductAPI) GetProducts(response http.ResponseWriter, request *http.Request) {
-	response.Header().Set("Content-Type", "application/json")
-	encoder := json.NewEncoder(response)
-
 	var limit int
 	var err error
 	if q := request.URL.Query().Get("limit"); q != "" {
@@ -91,6 +88,8 @@ func (api ProductAPI) GetProducts(response http.ResponseWriter, request *http.Re
 		fail(response, err)
 	}
 
+	response.Header().Set("Content-Type", "application/json")
+	encoder := json.NewEncoder(response)
 	err = encoder.Encode(products)
 	if err != nil {
 		fail(response, err)
