@@ -2,13 +2,13 @@ package endpoints
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
 	"log"
 	"math/rand"
 	"net/http"
 	"strconv"
 
 	"github.com/GoosvandenBekerom/intaker-bigtable-poc/data"
+	"github.com/google/uuid"
 )
 
 type ProductAPI struct {
