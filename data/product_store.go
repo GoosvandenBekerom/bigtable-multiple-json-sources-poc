@@ -6,14 +6,20 @@ import (
 	"encoding/json"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"strings"
 )
 
 const (
-	tableName           = "products"
+	tableName = "products"
+
 	columnFamilyProduct = "product"
 	columnProduct       = "product"
-	columnOffer         = "offer"
-	columnReview        = "review"
+
+	columnFamilyOffer = "offers"
+	columnOfferPrefix = "offer_"
+
+	columnFamilyReview = "reviews"
+	columnReviewPrefix = "review_"
 )
 
 type ProductStore struct {
@@ -51,6 +57,22 @@ func NewProductStore(ctx context.Context, project string, instance string) (Prod
 		}
 	}
 
+	err = adminClient.CreateColumnFamily(ctx, tableName, columnFamilyOffer)
+	if err != nil {
+		s, ok := status.FromError(err)
+		if !ok || s.Code() != codes.AlreadyExists {
+			return ProductStore{}, err
+		}
+	}
+
+	err = adminClient.CreateColumnFamily(ctx, tableName, columnFamilyReview)
+	if err != nil {
+		s, ok := status.FromError(err)
+		if !ok || s.Code() != codes.AlreadyExists {
+			return ProductStore{}, err
+		}
+	}
+
 	return ProductStore{table: client.Open(tableName)}, nil
 }
 
@@ -63,7 +85,7 @@ func (p ProductStore) SaveProduct(ctx context.Context, product Product) error {
 	mutation := bigtable.NewMutation()
 	mutation.Set(columnFamilyProduct, columnProduct, bigtable.Now(), data)
 
-	return p.table.Apply(ctx, product.Id, mutation)
+	return p.table.Apply(ctx, product.ID, mutation)
 }
 
 func (p ProductStore) SaveOffer(ctx context.Context, offer Offer) error {
@@ -73,7 +95,7 @@ func (p ProductStore) SaveOffer(ctx context.Context, offer Offer) error {
 	}
 
 	mutation := bigtable.NewMutation()
-	mutation.Set(columnFamilyProduct, columnOffer, bigtable.Now(), data)
+	mutation.Set(columnFamilyOffer, columnOfferPrefix+offer.ID, bigtable.Now(), data)
 
 	return p.table.Apply(ctx, offer.ProductID, mutation)
 }
@@ -85,7 +107,7 @@ func (p ProductStore) SaveReview(ctx context.Context, review Review) error {
 	}
 
 	mutation := bigtable.NewMutation()
-	mutation.Set(columnFamilyProduct, columnReview, bigtable.Now(), data)
+	mutation.Set(columnFamilyReview, columnReviewPrefix+review.ID, bigtable.Now(), data)
 
 	return p.table.Apply(ctx, review.ProductID, mutation)
 }
@@ -94,25 +116,7 @@ func (p ProductStore) GetAllProducts(ctx context.Context, limit int64) ([]Aggreg
 	products := make([]AggregatedProduct, 0)
 
 	err := p.table.ReadRows(ctx, bigtable.InfiniteRange(""), func(row bigtable.Row) bool {
-		var product AggregatedProduct
-		for _, item := range row[columnFamilyProduct] {
-			var err error
-			switch item.Column {
-			case columnFamilyProduct + ":" + columnProduct:
-				product.Product = item.Value
-				break
-			case columnFamilyProduct + ":" + columnOffer:
-				product.Offer = item.Value
-				break
-			case columnFamilyProduct + ":" + columnReview:
-				product.Review = item.Value
-				break
-			}
-			if err != nil {
-				return false
-			}
-		}
-		products = append(products, product)
+		products = append(products, rowToAggregatedProduct(row))
 		return true
 	}, bigtable.RowFilter(bigtable.LatestNFilter(1)), bigtable.LimitRows(limit))
 	if err != nil {
@@ -120,4 +124,33 @@ func (p ProductStore) GetAllProducts(ctx context.Context, limit int64) ([]Aggreg
 	}
 
 	return products, nil
+}
+
+// rowToAggregatedProduct maps a single bigtable row to an AggregatedProduct
+// only works accurately if row is read with: bigtable.RowFilter(bigtable.LatestNFilter(1))
+func rowToAggregatedProduct(row bigtable.Row) AggregatedProduct {
+	var product AggregatedProduct
+
+	// product columns
+	for _, item := range row[columnFamilyProduct] {
+		if item.Column == columnFamilyProduct+":"+columnProduct {
+			product.Product = item.Value
+		}
+	}
+
+	// offer columns
+	for _, item := range row[columnFamilyOffer] {
+		if strings.HasPrefix(item.Column, columnFamilyOffer+":"+columnOfferPrefix) {
+			product.Offers = append(product.Offers, item.Value)
+		}
+	}
+
+	// review columns
+	for _, item := range row[columnFamilyReview] {
+		if strings.HasPrefix(item.Column, columnFamilyReview+":"+columnReviewPrefix) {
+			product.Reviews = append(product.Reviews, item.Value)
+		}
+	}
+
+	return product
 }

@@ -38,7 +38,7 @@ func (api ProductAPI) GenerateProducts(response http.ResponseWriter, request *ht
 		log.Printf("generating product with id %s\n", id)
 
 		err = api.store.SaveProduct(request.Context(), data.Product{
-			Id:          id,
+			ID:          id,
 			Title:       "title of " + id,
 			Description: "description of " + id,
 		})
@@ -47,23 +47,29 @@ func (api ProductAPI) GenerateProducts(response http.ResponseWriter, request *ht
 			return
 		}
 
-		err = api.store.SaveOffer(request.Context(), data.Offer{
-			ProductID:    id,
-			PriceInCents: rand.Intn(1000_00),
-		})
-		if err != nil {
-			fail(response, err)
-			return
+		for offerCounter := 0; offerCounter < rand.Intn(5); offerCounter++ {
+			err = api.store.SaveOffer(request.Context(), data.Offer{
+				ProductID:    id,
+				ID:           uuid.New().String(),
+				PriceInCents: rand.Intn(1000_00),
+			})
+			if err != nil {
+				fail(response, err)
+				return
+			}
 		}
 
-		err = api.store.SaveReview(request.Context(), data.Review{
-			ProductID: id,
-			Rating:    rand.Intn(5),
-			Message:   "message of review of product " + id,
-		})
-		if err != nil {
-			fail(response, err)
-			return
+		for reviewCounter := 0; reviewCounter < rand.Intn(5); reviewCounter++ {
+			err = api.store.SaveReview(request.Context(), data.Review{
+				ProductID: id,
+				ID:        uuid.New().String(),
+				Rating:    rand.Intn(5),
+				Message:   "message of review " + strconv.Itoa(reviewCounter) + " of product " + id,
+			})
+			if err != nil {
+				fail(response, err)
+				return
+			}
 		}
 	}
 
