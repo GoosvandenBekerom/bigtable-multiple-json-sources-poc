@@ -36,3 +36,8 @@ See product by id
 ```
 cbt -project fake-local-project -instance products lookup products <product-id>
 ```
+
+Delete all products
+```
+cbt -project fake-local-project -instance products deleteallrows products
+```
